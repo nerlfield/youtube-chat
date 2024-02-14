@@ -1,0 +1,11 @@
+openai==1.6.1
+chromadb==0.4.21
+langchain==0.0.335
+numpy==1.26.3
+scipy==1.10.1
+tqdm
+jupyterlab==4.0.10
+llama-index==0.9.21
+youtube-transcript-api==0.6.2
+streamlit==1.31.0
+pytube==15.0.0
