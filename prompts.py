@@ -19,6 +19,9 @@ prompt_to_dataquestion_template = PromptTemplate.from_template(
 Create a search query from the given prompt, focusing solely on essential keywords and facts. 
 This query will be used to retrieve specific information from a database, so it must be concise and packed with relevant terms.
 
+If needed, use chat history context to extent a search query:
+{chat_history}
+
 Prompt:
 {prompt}
         """
@@ -26,7 +29,30 @@ Prompt:
 
 vdb_query_prompt_template = PromptTemplate.from_template(
         """
-Giving these summaries from the research {summaries}
-Answer the following question: {question}
+Using the provided chat history and summaries from research, address the question below. 
+The chat history should offer context and background, while the summaries provide focused insights relevant to the question. 
+Combine these resources to formulate a comprehensive and precise answer.
+
+Chat History:
+{chat_history}
+
+Research Summaries:
+{summaries}
+
+Question:
+{question}
+        """
+    )
+
+
+question_answer_template = PromptTemplate.from_template(
+        """
+Given the context provided by the chat history, respond to the question below. Prioritize clarity, conciseness, and directness in your answer
+
+Chat History:
+{chat_history}
+
+Question:
+{question}
         """
     )

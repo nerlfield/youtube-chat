@@ -7,9 +7,10 @@ from tqdm.auto import tqdm
 
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from langchain.schema import HumanMessage, SystemMessage
 
 from youtube_io import get_transcription, chunk_with_overlap, extract_youtube_video_id, get_yt_metadata
-from prompts import transcription_summary_template, prompt_to_dataquestion_template, vdb_query_prompt_template
+from prompts import transcription_summary_template, prompt_to_dataquestion_template, vdb_query_prompt_template, question_answer_template
 
 st.title("youtube-chat")
 
@@ -20,9 +21,7 @@ chroma_client = chromadb.PersistentClient(path='/app/db')
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-st.session_state.collection_map = {item.metadata['title']:item.name for item in chroma_client.list_collections()}
-st.session_state.selected_message = st.selectbox("Select a collection", st.session_state.collection_map.keys())
-st.session_state.collection = chroma_client.get_collection(name=st.session_state.collection_map[st.session_state.selected_message])
+st.session_state.collection = None if not st.session_state.get('collection', None) else st.session_state.collection
 
 # Reset button to clear the conversation
 if st.button("Reset Conversation"):
@@ -31,10 +30,26 @@ if st.button("Reset Conversation"):
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        
+
+def get_prompt_chat_history():
+    chat_history = ""
+    for message in st.session_state.messages: 
+        if message["role"] == "assistant":
+            chat_history += f"AI: {message['content']}\n"
+        else:
+            chat_history += f"User: {message['content']}\n"
+    return chat_history
+
+
 def process_video_flow(video_id):
+    # TODO: format videoid, it should not contain any wrong chars!
+    st.session_state.collection = chroma_client.get_or_create_collection(name=video_id.lower(), metadata=get_yt_metadata(video_id))
+    if st.session_state.collection.count() > 0: 
+        print(f"The collection for video ID {video_id} is empty.")
+        return video_id
+
     transcription = get_transcription(video_id)
-    transcription_chunks = chunk_with_overlap(transcription, 200, 50)
+    transcription_chunks = chunk_with_overlap(transcription, 100, 50)
 
     joined_texts = ['\n'.join([i['text'] for i in chunk]) for chunk in transcription_chunks]
 
@@ -52,27 +67,19 @@ def process_video_flow(video_id):
                 chunk_summaries.append(result)
             except Exception as exc:
                 print(f'Generated an exception: {exc}')
-
-    # TODO: format videoid, it should not contain any wrong chars!
-    st.session_state.collection = chroma_client.get_or_create_collection(name=video_id.lower(), metadata=get_yt_metadata(video_id))
-
-    if st.session_state.collection.count() == 0:
-        print(f"The collection for video ID {video_id} is empty.")
-        ids = [f'{i}' for i in range(len(chunk_summaries))]
-
-        st.session_state.collection.add(
-                    documents=chunk_summaries,
-                    ids=ids
-                )
-        
-    st.session_state.collection_map = {item.metadata['title']:item.name for item in chroma_client.list_collections()}
-    st.session_state.selected_message = st.session_state.collection.metadata['title'] #st.selectbox("Select a collection", st.session_state.collection_map.keys())
-    st.session_state.collection = chroma_client.get_collection(name=st.session_state.collection_map[st.session_state.selected_message])
     
+    ids = [f'{i}' for i in range(len(chunk_summaries))]
+
+    st.session_state.collection.add(
+                documents=chunk_summaries,
+                ids=ids
+            )
+        
     return video_id
 
 def answer_main_question(collection, question, llm, n_results=10):
-    query = llm.predict( prompt_to_dataquestion_template.format(prompt=question) )
+    chat_history = get_prompt_chat_history()
+    query = llm.predict(prompt_to_dataquestion_template.format(prompt=question, chat_history=chat_history))
     
     results = collection.query(
         query_texts=[query],
@@ -82,21 +89,32 @@ def answer_main_question(collection, question, llm, n_results=10):
     prompt = vdb_query_prompt_template.format(
         summaries=results,
         question=question,
+        chat_history=chat_history
     )
 
-    out = llm.predict( prompt )
+    out = llm.predict(prompt)
     return out
 
 def process_question(question):
-    return answer_main_question(st.session_state.collection, question, model, 10)
+    print(st.session_state.messages)
+    if st.session_state.collection is not None:
+        return answer_main_question(st.session_state.collection, question, model, 10)
+    else:
+        chat_history = get_prompt_chat_history()
+        prompt = question_answer_template.format(question=question, chat_history=chat_history)
+
+        print(prompt)
+
+        return model.predict(prompt)
 
 def user_flow(prompt):
     video_id = extract_youtube_video_id(prompt)
-    if video_id:# and video_id not in st.session_state.collection_map.keys():
-        prompt = process_video_flow(video_id)
+    if video_id:
+        res = process_video_flow(video_id)
+        res = process_question("Give me a summary of this video. Also give me the content and topics of it.")
     else:
-        prompt = process_question(prompt)
-    return prompt
+        res = process_question(prompt)
+    return res
 
 if prompt := st.chat_input("What is up?"):
     st.session_state.messages.append({"role": "user", "content": prompt})

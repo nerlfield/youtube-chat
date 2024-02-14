@@ -26,6 +26,9 @@ def extract_youtube_video_id(url: str) -> str:
     return None
 
 def chunk_with_overlap(arr, chunk_size, overlap):
+    if len(arr) < chunk_size:
+        return [arr]  # Return the array as a single chunk
+    
     chunks = []
     i = 0
     while i + chunk_size <= len(arr):
