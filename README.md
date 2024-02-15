@@ -18,3 +18,7 @@ docker run -d -it --init \
 nohup python demo/main_multistage.py > demo.txt &
 
 streamlit run main.py --server.address 0.0.0.0 --server.port 7860
+
+make build
+
+make run
