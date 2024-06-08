@@ -1,6 +1,7 @@
 # 1. add sidebar with description, who talks, agenda/topics etc
 # 2. add timestamps
 # 3. add history to the bot
+# 4. generate questions and answers to video content and put them into db in format: question: metadata[content]
 
 from openai import OpenAI
 import streamlit as st
@@ -10,8 +11,8 @@ from tqdm.auto import tqdm
 
 from langchain.chat_models import ChatOpenAI
 
-from youtube_io import get_transcription, chunk_with_overlap, extract_youtube_video_id, get_yt_metadata
-from prompts import transcription_summary_template, prompt_to_dataquestion_template, vdb_query_prompt_template, question_answer_template
+from src.youtube_io import get_transcription, chunk_with_overlap, extract_youtube_video_id, get_yt_metadata
+from src.prompts import transcription_summary_template, prompt_to_dataquestion_template, vdb_query_prompt_template, question_answer_template
 
 st.title("youtube-chat")
 
@@ -103,12 +104,14 @@ def user_flow(prompt):
         if not res:
             res = "This video lacks subtitles. Please provide a different video link."
         else:
-            res0 = process_question("Give me a summary of this video. Also give me the content and topics of it.")
+            res0 = process_question("Give me a summary of this video. \n\n")
             res1 = process_question("Give me this video topics.")
-            # res2 = process_question(f"Propose the list of questions for the following content: {res1}") + "\n\n"
-            # res3 = process_question(f"Based on the following questions: {res2}, generate answers.")
 
-            res = res0 + res1
+            res = f"""
+{res0}
+
+{res1}
+"""
     else:
         res = process_question(prompt)
     return res
