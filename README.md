@@ -14,7 +14,7 @@ You can run this repository in two ways:
 1. Using a Docker environment
 2. Using Conda
 
-Before starting, create a `.env` file and add your OpenAI API key. Refer to `.env_example` for the necessary environment variables.
+Before starting, fill the `.env` file and add your OpenAI API key.
 
 ### Using Docker
 
